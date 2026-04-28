@@ -1,11 +1,15 @@
 from flask import Flask, request, redirect, session, render_template_string
-import sqlite3, random, time
+import sqlite3, random, time, smtplib, os
+from email.mime.text import MIMEText
 from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = "secret123"
 
 DB = "db.sqlite3"
+
+EMAIL_USER = os.getenv("EMAIL_USER")
+EMAIL_PASS = os.getenv("EMAIL_PASS")
 
 def db():
     return sqlite3.connect(DB)
@@ -14,25 +18,29 @@ def init():
     c = db()
     cur = c.cursor()
 
-    cur.execute("""CREATE TABLE IF NOT EXISTS users(
-        name TEXT,
-        email TEXT,
-        code TEXT,
-        role TEXT DEFAULT 'user',
-        last_send INTEGER DEFAULT 0
-    )""")
+    cur.execute("CREATE TABLE IF NOT EXISTS users(name TEXT,email TEXT,code TEXT,last_send INTEGER DEFAULT 0)")
+    cur.execute("CREATE TABLE IF NOT EXISTS bookings(name TEXT,station TEXT)")
+    cur.execute("CREATE TABLE IF NOT EXISTS result_sent(done INTEGER)")
 
-    cur.execute("CREATE TABLE IF NOT EXISTS stations(name TEXT UNIQUE)")
-    cur.execute("CREATE TABLE IF NOT EXISTS bookings(name TEXT, station TEXT)")
-
-    stations = ["Лобня","Физтех","Селигерская","Катуар","Подосинки"]
-    for s in stations:
-        cur.execute("INSERT OR IGNORE INTO stations VALUES(?)",(s,))
+    cur.execute("INSERT OR IGNORE INTO result_sent VALUES(0)")
 
     c.commit()
     c.close()
 
 init()
+
+def send_email(to, subject, text):
+    msg = MIMEText(text)
+    msg["Subject"] = subject
+    msg["From"] = EMAIL_USER
+    msg["To"] = to
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(EMAIL_USER, EMAIL_PASS)
+        server.sendmail(EMAIL_USER, to, msg.as_string())
+
+def send_code(email, code):
+    send_email(email, "Код входа", f"Ваш код: {code}")
 
 # ---------- UI ----------
 base = """
@@ -43,18 +51,14 @@ body{font-family:Arial;background:#0f172a;color:#fff;text-align:center}
 .container{margin-top:80px}
 input,button{padding:10px;margin:5px;border-radius:6px;border:none}
 button{background:#22c55e;color:#fff;cursor:pointer}
-.top{
-position:fixed;
-top:10px;
-right:10px;
-}
+.top{position:fixed;top:10px;right:10px;}
 </style>
 </head>
 <body>
 
 <div class="top">
-<a href="/admin_login"><button>Админ</button></a>
-<a href="/driver_login"><button>Водитель</button></a>
+<a href="/admin"><button>Админ</button></a>
+<a href="/driver"><button>Водитель</button></a>
 </div>
 
 <div class="container">
@@ -64,36 +68,12 @@ right:10px;
 </html>
 """
 
-def send_code(email, code):
-    print("CODE:", code)
-
 # ---------- HOME ----------
 @app.route("/")
 def home():
     return render_template_string(base % """
-    <h1>🚍 Bus Booking</h1>
+    <h1>🚍 Запись на автобус</h1>
     <a href="/login"><button>Войти</button></a>
-    <a href="/register"><button>Регистрация</button></a>
-    """)
-
-# ---------- REGISTER ----------
-@app.route("/register", methods=["GET","POST"])
-def register():
-    if request.method == "POST":
-        c = db()
-        cur = c.cursor()
-        cur.execute("INSERT INTO users(name,email) VALUES (?,?)",
-                    (request.form["name"], request.form["email"]))
-        c.commit()
-        return redirect("/login")
-
-    return render_template_string(base % """
-    <h2>Регистрация</h2>
-    <form method="post">
-    ФИО<br><input name="name"><br>
-    Email<br><input name="email"><br>
-    <button>Создать</button>
-    </form>
     """)
 
 # ---------- LOGIN ----------
@@ -140,11 +120,10 @@ def verify():
 
         c = db()
         cur = c.cursor()
-        user = cur.execute("SELECT code,role FROM users WHERE name=?", (name,)).fetchone()
+        user = cur.execute("SELECT code FROM users WHERE name=?", (name,)).fetchone()
 
         if user and user[0] == code:
             session["auth"] = True
-            session["role"] = user[1]
             return redirect("/dashboard")
 
         return "Неверный код"
@@ -160,18 +139,10 @@ def verify():
 # ---------- DASHBOARD ----------
 @app.route("/dashboard")
 def dashboard():
-    if not session.get("auth"):
-        return redirect("/")
-
-    c = db()
-00:25
-stations = c.execute("SELECT name FROM stations").fetchall()
-    options = "".join([f"<option>{s[0]}</option>" for s in stations])
-
-    return render_template_string(base % f"""
-    <h2>Выбор станции</h2>
+    return render_template_string(base % """
+    <h2>Запись</h2>
     <form method="post" action="/book">
-    <select name="station">{options}</select><br>
+    Станция <input name="station">
     <button>Записаться</button>
     </form>
     """)
@@ -188,8 +159,11 @@ def book():
     cur = c.cursor()
 
     count = cur.execute("SELECT COUNT(*) FROM bookings").fetchone()[0]
-
-    if count >= 7:
+app.run
+app.run - This website is for sale! - app Resources and Information.
+This website is for sale! app.run is your first and best source for information about app. Here you will also find topics relating to issues of general interest. We hope you find what ...
+00:37
+if count >= 7:
         return "Извините, мест нет"
 
     cur.execute("INSERT INTO bookings VALUES (?,?)",
@@ -198,87 +172,38 @@ def book():
 
     return "Вы записаны"
 
-# ---------- ADMIN LOGIN ----------
-@app.route("/admin_login", methods=["GET","POST"])
-def admin_login():
-    if request.method == "POST":
-        if request.form["login"] == "admin" and request.form["password"] == "Emerson08com":
-            session["role"] = "admin"
-            return redirect("/admin")
+# ---------- AUTO RESULT ----------
+@app.before_request
+def auto_send_results():
+    now = datetime.now().hour
 
-    return render_template_string(base % """
-    <h2>Вход админа</h2>
-    <form method="post">
-    Логин <input name="login"><br>
-    Пароль <input name="password" type="password"><br>
-    <button>Войти</button>
-    </form>
-    """)
-
-# ---------- ADMIN PANEL ----------
-@app.route("/admin", methods=["GET","POST"])
-def admin():
-    if session.get("role") != "admin":
-        return "Нет доступа"
-
-    return render_template_string(base % """
-    <h2>Админка</h2>
-
-    <form method="post" action="/add_user">
-    ФИО <input name="name">
-    Email <input name="email">
-    <button>Добавить</button>
-    </form>
-
-    <form method="post" action="/add_station">
-    <input name="station">
-    <button>Добавить станцию</button>
-    </form>
-    """)
-
-@app.route("/add_user", methods=["POST"])
-def add_user():
     c = db()
     cur = c.cursor()
-    cur.execute("INSERT INTO users(name,email) VALUES (?,?)",
-                (request.form["name"], request.form["email"]))
-    c.commit()
-    return redirect("/admin")
 
-@app.route("/add_station", methods=["POST"])
-def add_station():
-    c = db()
-    cur = c.cursor()
-    cur.execute("INSERT INTO stations(name) VALUES (?)",
-                (request.form["station"],))
-    c.commit()
-    return redirect("/admin")
+    done = cur.execute("SELECT done FROM result_sent").fetchone()[0]
 
-# ---------- DRIVER LOGIN ----------
-@app.route("/driver_login", methods=["GET","POST"])
-def driver_login():
-    if request.method == "POST":
-        if request.form["login"] == "driver" and request.form["password"] == "Driver08":
-            session["role"] = "driver"
-            return redirect("/driver")
+    if now >= 20 and done == 0:
+        users = cur.execute("SELECT name,email FROM users").fetchall()
+        winners = cur.execute("SELECT name FROM bookings LIMIT 7").fetchall()
+        winners = [w[0] for w in winners]
 
-    return render_template_string(base % """
-    <h2>Вход водителя</h2>
-    <form method="post">
-    Логин <input name="login"><br>
-    Пароль <input name="password" type="password"><br>
-    <button>Войти</button>
-    </form>
-    """)
+        for u in users:
+            if u[0] in winners:
+                send_email(u[1], "Результат", "Вы записаны на автобус")
+            else:
+                send_email(u[1], "Результат", "Вы не успели записаться")
 
-# ---------- DRIVER PANEL ----------
+        cur.execute("UPDATE result_sent SET done=1")
+        c.commit()
+
+# ---------- DRIVER ----------
 @app.route("/driver")
 def driver():
-    if session.get("role") != "driver":
-        return "Нет доступа"
+    if datetime.now().hour < 20:
+        return "Список будет после 20:00"
 
     c = db()
-    data = c.execute("SELECT name, station FROM bookings").fetchall()
+    data = c.execute("SELECT name,station FROM bookings").fetchall()
 
     rows = "".join([f"<p>{d[0]} — {d[1]}</p>" for d in data])
 
@@ -287,6 +212,13 @@ def driver():
     {rows}
     """)
 
-# ---------- RUN ----------
+# ---------- ADMIN ----------
+@app.route("/admin")
+def admin():
+    return render_template_string(base % """
+    <h2>Админка</h2>
+    """)
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
+app.run
