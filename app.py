@@ -159,10 +159,7 @@ def book():
     cur = c.cursor()
 
     count = cur.execute("SELECT COUNT(*) FROM bookings").fetchone()[0]
-app.run
-app.run - This website is for sale! - app Resources and Information.
-This website is for sale! app.run is your first and best source for information about app. Here you will also find topics relating to issues of general interest. We hope you find what ...
-00:37
+    
 if count >= 7:
         return "Извините, мест нет"
 
