@@ -1,15 +1,11 @@
 from flask import Flask, request, redirect, session, render_template_string
-import sqlite3, random, smtplib, os
-from email.mime.text import MIMEText
+import sqlite3
 from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = "bus_app_secret"
 
 DB = "db.sqlite3"
-
-EMAIL_USER = os.getenv("EMAIL_USER")
-EMAIL_PASS = os.getenv("EMAIL_PASS")
 
 ADMIN_LOGIN = "admin"
 ADMIN_PASSWORD = "Emerson08com"
@@ -31,9 +27,7 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         email TEXT UNIQUE NOT NULL,
-        password TEXT,
-        code TEXT,
-        verified INTEGER DEFAULT 0
+        password TEXT NOT NULL
     )
     """)
 
@@ -76,25 +70,6 @@ def init_db():
 init_db()
 
 
-def send_email(to, subject, text):
-    if not EMAIL_USER or not EMAIL_PASS:
-        print(f"EMAIL DEV MODE -> {to}: {text}")
-        return
-
-    try:
-        msg = MIMEText(text, "plain", "utf-8")
-        msg["Subject"] = subject
-        msg["From"] = EMAIL_USER
-        msg["To"] = to
-
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login(EMAIL_USER, EMAIL_PASS)
-            server.sendmail(EMAIL_USER, [to], msg.as_string())
-
-    except Exception as e:
-        print("EMAIL ERROR:", e)
-
-
 def layout(content):
     logout_btn = '<a href="/logout" class="sheet-link danger">Выйти</a>' if session.get("role") else ""
 
@@ -106,10 +81,7 @@ def layout(content):
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Запись на автобус</title>
 <style>
-* {{
-    box-sizing: border-box;
-}}
-
+* {{ box-sizing: border-box; }}
 body {{
     margin: 0;
     min-height: 100vh;
@@ -117,14 +89,12 @@ body {{
     background: linear-gradient(180deg, #0f172a, #020617);
     color: white;
 }}
-
 .top-menu {{
     position: fixed;
     top: 16px;
     right: 16px;
     z-index: 100;
 }}
-
 .menu-toggle {{
     width: 46px;
     height: 46px;
@@ -136,7 +106,6 @@ body {{
     backdrop-filter: blur(20px);
     cursor: pointer;
 }}
-
 .sheet {{
     display: none;
     position: absolute;
@@ -149,11 +118,7 @@ body {{
     backdrop-filter: blur(22px);
     box-shadow: 0 20px 50px rgba(0,0,0,.45);
 }}
-
-.top-menu:hover .sheet {{
-    display: block;
-}}
-
+.top-menu:hover .sheet {{ display: block; }}
 .sheet-link {{
     display: block;
     width: 100%;
@@ -166,15 +131,8 @@ body {{
     text-align: center;
     font-weight: 700;
 }}
-
-.sheet-link.blue {{
-    background: #007aff;
-}}
-
-.sheet-link.danger {{
-    background: #ff3b30;
-}}
-
+.sheet-link.blue {{ background: #007aff; }}
+.sheet-link.danger {{ background: #ff3b30; }}
 .container {{
     width: 92%;
     max-width: 900px;
@@ -186,15 +144,6 @@ body {{
     box-shadow: 0 25px 70px rgba(0,0,0,.38);
     text-align: center;
 }}
-
-.small-container {{
-    max-width: 440px;
-}}
-
-h1, h2, h3 {{
-    margin-top: 0;
-}}
-
 input, select {{
     width: 100%;
     max-width: 420px;
@@ -204,7 +153,6 @@ input, select {{
     border-radius: 16px;
     font-size: 16px;
 }}
-
 button, .btn {{
     display: inline-block;
     width: 100%;
@@ -220,54 +168,33 @@ button, .btn {{
     text-decoration: none;
     cursor: pointer;
 }}
-
-.btn-blue {{
-    background: #007aff;
-}}
-
-.btn-red {{
-    background: #ff3b30;
-}}
-
+.btn-blue {{ background: #007aff; }}
+.btn-red {{ background: #ff3b30; }}
 .grid {{
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: 16px;
     text-align: left;
 }}
-
 .card {{
     background: rgba(255,255,255,.1);
     border: 1px solid rgba(255,255,255,.12);
     border-radius: 22px;
     padding: 18px;
+    margin-top: 15px;
 }}
-
 table {{
     width: 100%;
     border-collapse: collapse;
     margin-top: 12px;
     font-size: 14px;
 }}
-
 th, td {{
     padding: 10px;
     border-bottom: 1px solid rgba(255,255,255,.14);
     text-align: left;
 }}
-
-.badge {{
-    display: inline-block;
-    padding: 5px 9px;
-    border-radius: 999px;
-    background: rgba(52,199,89,.22);
-    color: #86efac;
-    font-size: 12px;
-}}
-
-.empty {{
-    color: #cbd5e1;
-}}
+.empty {{ color: #cbd5e1; }}
 </style>
 </head>
 <body>
@@ -295,7 +222,7 @@ th, td {{
 def home():
     return layout("""
 <h1>🚍 Запись на автобус</h1>
-<p>Зарегистрируйтесь, подтвердите почту и запишитесь на автобус.</p>
+<p>Зарегистрируйтесь и запишитесь на автобус.</p>
 <a href="/register" class="btn">Регистрация</a>
 <a href="/login" class="btn btn-blue">Вход пользователя</a>
 """)
@@ -306,7 +233,11 @@ def register():
     if request.method == "POST":
         name = request.form["name"].strip()
         email = request.form["email"].strip().lower()
-        code = str(random.randint(100000, 999999))
+        p1 = request.form["password1"]
+        p2 = request.form["password2"]
+
+        if p1 != p2:
+            return layout("<h2>Пароли не совпадают</h2><a href='/register' class='btn btn-blue'>Назад</a>")
 
         c = db()
         cur = c.cursor()
@@ -314,101 +245,26 @@ def register():
         exists = cur.execute("SELECT id FROM users WHERE email=?", (email,)).fetchone()
         if exists:
             c.close()
-            return layout("""
-<h2>Эта почта уже зарегистрирована</h2>
-<a href="/login" class="btn btn-blue">Войти</a>
-""")
+            return layout("<h2>Эта почта уже зарегистрирована</h2><a href='/login' class='btn btn-blue'>Войти</a>")
 
         cur.execute(
-            "INSERT INTO users(name,email,code,verified) VALUES(?,?,?,0)",
-            (name, email, code)
+            "INSERT INTO users(name,email,password) VALUES(?,?,?)",
+            (name, email, p1)
         )
 
         c.commit()
         c.close()
 
-        send_email(email, "Код подтверждения", f"Ваш код подтверждения: {code}")
-
-        session["verify_email"] = email
-        return redirect("/verify_register")
+        return layout("<h2>Аккаунт создан ✅</h2><a href='/login' class='btn btn-blue'>Войти</a>")
 
     return layout("""
 <h2>Регистрация</h2>
 <form method="post">
     <input name="name" placeholder="ФИО" required>
-    <input name="email" type="email" placeholder="Рабочая почта" required>
-    <button>Отправить код</button>
-</form>
-""")
-
-
-@app.route("/verify_register", methods=["GET", "POST"])
-def verify_register():
-    email = session.get("verify_email")
-    if not email:
-        return redirect("/register")
-
-    if request.method == "POST":
-        code = request.form["code"].strip()
-
-        c = db()
-        cur = c.cursor()
-        user = cur.execute("SELECT code FROM users WHERE email=?", (email,)).fetchone()
-        c.close()
-
-        if user and user[0] == code:
-            session["password_email"] = email
-            return redirect("/set_password")
-
-        return layout("""
-<h2>Неверный код</h2>
-<a href="/verify_register" class="btn btn-blue">Попробовать снова</a>
-""")
-
-    return layout("""
-<h2>Код подтверждения</h2>
-<form method="post">
-    <input name="code" placeholder="Код из почты" required>
-    <button>Подтвердить</button>
-</form>
-""")
-
-
-@app.route("/set_password", methods=["GET", "POST"])
-def set_password():
-    email = session.get("password_email")
-    if not email:
-        return redirect("/register")
-
-    if request.method == "POST":
-        p1 = request.form["password1"]
-        p2 = request.form["password2"]
-
-        if p1 != p2:
-            return layout("""
-<h2>Пароли не совпадают</h2>
-<a href="/set_password" class="btn btn-blue">Назад</a>
-""")
-
-        c = db()
-        cur = c.cursor()
-        cur.execute("UPDATE users SET password=?, verified=1 WHERE email=?", (p1, email))
-        c.commit()
-        c.close()
-
-        session.clear()
-
-        return layout("""
-<h2>Аккаунт создан ✅</h2>
-<a href="/login" class="btn btn-blue">Войти</a>
-""")
-
-    return layout("""
-<h2>Придумайте пароль</h2>
-<form method="post">
+    <input name="email" type="email" placeholder="Почта" required>
     <input type="password" name="password1" placeholder="Пароль" required>
     <input type="password" name="password2" placeholder="Повторите пароль" required>
-    <button>Сохранить</button>
+    <button>Зарегистрироваться</button>
 </form>
 """)
 
@@ -423,7 +279,7 @@ def login():
         cur = c.cursor()
 
         user = cur.execute(
-            "SELECT id,name FROM users WHERE email=? AND password=? AND verified=1",
+            "SELECT id,name FROM users WHERE email=? AND password=?",
             (email, password)
         ).fetchone()
 
@@ -435,10 +291,7 @@ def login():
             session["user_name"] = user[1]
             return redirect("/dashboard")
 
-        return layout("""
-<h2>Неверная почта или пароль</h2>
-<a href="/login" class="btn btn-blue">Назад</a>
-""")
+        return layout("<h2>Неверная почта или пароль</h2><a href='/login' class='btn btn-blue'>Назад</a>")
 
     return layout("""
 <h2>Вход пользователя</h2>
@@ -464,7 +317,6 @@ def dashboard():
     ).fetchone()
 
     stations = cur.execute("SELECT name FROM stations ORDER BY name").fetchall()
-
     c.close()
 
     if booked:
@@ -499,20 +351,12 @@ def book():
     now = datetime.now().hour
 
     if now < 17 or now >= 20:
-        return layout("""
-<h2>Запись закрыта</h2>
-<p>Запись доступна только с 17:00 до 20:00.</p>
-<a href="/dashboard" class="btn btn-blue">Назад</a>
-""")
+        return layout("<h2>Запись закрыта</h2><p>Запись доступна только с 17:00 до 20:00.</p>")
 
     c = db()
     cur = c.cursor()
 
-    already = cur.execute(
-        "SELECT id FROM bookings WHERE user_id=?",
-        (session["user_id"],)
-    ).fetchone()
-
+    already = cur.execute("SELECT id FROM bookings WHERE user_id=?", (session["user_id"],)).fetchone()
     if already:
         c.close()
         return redirect("/dashboard")
@@ -521,18 +365,11 @@ def book():
 
     if count >= 7:
         c.close()
-        return layout("""
-<h2>Извините, но вы не успели записаться</h2>
-<a href="/dashboard" class="btn btn-blue">Назад</a>
-""")
+        return layout("<h2>Извините, но вы не успели записаться</h2>")
 
     cur.execute(
         "INSERT INTO bookings(user_id,station,created_at) VALUES(?,?,?)",
-        (
-            session["user_id"],
-            request.form["station"],
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        )
+        (session["user_id"], request.form["station"], datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     )
 
     c.commit()
@@ -549,10 +386,7 @@ def admin_login():
             session["role"] = "admin"
             return redirect("/admin")
 
-        return layout("""
-<h2>Неверный логин или пароль</h2>
-<a href="/admin_login" class="btn btn-blue">Назад</a>
-""")
+        return layout("<h2>Неверный логин или пароль</h2><a href='/admin_login' class='btn btn-blue'>Назад</a>")
 
     return layout("""
 <h2>Вход Администратора</h2>
@@ -572,10 +406,8 @@ def admin():
     c = db()
     cur = c.cursor()
 
-    users = cur.execute("SELECT id,name,email,verified FROM users ORDER BY id DESC").fetchall()
-
+    users = cur.execute("SELECT id,name,email FROM users ORDER BY id DESC").fetchall()
     drivers = cur.execute("SELECT id,login FROM drivers ORDER BY id DESC").fetchall()
-
     stations = cur.execute("SELECT id,name FROM stations ORDER BY name").fetchall()
 
     bookings = cur.execute("""
@@ -593,14 +425,14 @@ def admin():
     ]) or "<tr><td colspan='4' class='empty'>Пока никто не записался</td></tr>"
 
     user_rows = "".join([
-        f"<tr><td>{u[1]}</td><td>{u[2]}</td><td>{'Да' if u[3] else 'Нет'}</td><td><a href='/admin/delete_user/{u[0]}' class='btn btn-red'>Удалить</a></td></tr>"
+        f"<tr><td>{u[1]}</td><td>{u[2]}</td><td><a href='/admin/delete_user/{u[0]}' class='btn btn-red'>Удалить</a></td></tr>"
         for u in users
-    ]) or "<tr><td colspan='4' class='empty'>Пользователей нет</td></tr>"
+    ]) or "<tr><td colspan='3' class='empty'>Пользователей нет</td></tr>"
 
     driver_rows = "".join([
         f"<tr><td>{d[1]}</td><td><a href='/admin/delete_driver/{d[0]}' class='btn btn-red'>Удалить</a></td></tr>"
         for d in drivers
-    ]) or "<tr><td colspan='2' class='empty'>Водителей нет</td></tr>"
+    ])
 
     station_rows = "".join([
         f"<tr><td>{s[1]}</td><td><a href='/admin/delete_station/{s[0]}' class='btn btn-red'>Удалить</a></td></tr>"
@@ -648,9 +480,9 @@ def admin():
 </div>
 
 <div class="card">
-    <h2>Все пользователи</h2>
+    <h2>Пользователи</h2>
     <table>
-        <tr><th>ФИО</th><th>Email</th><th>Подтверждён</th><th>Действие</th></tr>
+        <tr><th>ФИО</th><th>Email</th><th>Действие</th></tr>
         {user_rows}
     </table>
 </div>
@@ -682,19 +514,12 @@ def admin_add_user():
 
     c = db()
     cur = c.cursor()
-
     cur.execute(
-        "INSERT OR IGNORE INTO users(name,email,password,verified) VALUES(?,?,?,1)",
-        (
-            request.form["name"].strip(),
-            request.form["email"].strip().lower(),
-            request.form["password"]
-        )
+        "INSERT OR IGNORE INTO users(name,email,password) VALUES(?,?,?)",
+        (request.form["name"].strip(), request.form["email"].strip().lower(), request.form["password"])
     )
-
     c.commit()
     c.close()
-
     return redirect("/admin")
 
 
@@ -709,7 +534,6 @@ def admin_delete_user(user_id):
     cur.execute("DELETE FROM users WHERE id=?", (user_id,))
     c.commit()
     c.close()
-
     return redirect("/admin")
 
 
@@ -720,15 +544,12 @@ def admin_add_driver():
 
     c = db()
     cur = c.cursor()
-
     cur.execute(
         "INSERT OR IGNORE INTO drivers(login,password) VALUES(?,?)",
         (request.form["login"].strip(), request.form["password"])
     )
-
     c.commit()
     c.close()
-
     return redirect("/admin")
 
 
@@ -742,7 +563,6 @@ def admin_delete_driver(driver_id):
     cur.execute("DELETE FROM drivers WHERE id=?", (driver_id,))
     c.commit()
     c.close()
-
     return redirect("/admin")
 
 
@@ -756,7 +576,6 @@ def admin_add_station():
     cur.execute("INSERT OR IGNORE INTO stations(name) VALUES(?)", (request.form["station"].strip(),))
     c.commit()
     c.close()
-
     return redirect("/admin")
 
 
@@ -770,7 +589,6 @@ def admin_delete_station(station_id):
     cur.execute("DELETE FROM stations WHERE id=?", (station_id,))
     c.commit()
     c.close()
-
     return redirect("/admin")
 
 
@@ -782,24 +600,18 @@ def driver_login():
 
         c = db()
         cur = c.cursor()
-
         driver = cur.execute(
             "SELECT id FROM drivers WHERE login=? AND password=?",
             (login, password)
         ).fetchone()
-
         c.close()
 
         if driver:
             session.clear()
             session["role"] = "driver"
-            session["driver_login"] = login
             return redirect("/driver")
 
-        return layout("""
-<h2>Неверный логин или пароль</h2>
-<a href="/driver_login" class="btn btn-blue">Назад</a>
-""")
+        return layout("<h2>Неверный логин или пароль</h2><a href='/driver_login' class='btn btn-blue'>Назад</a>")
 
     return layout("""
 <h2>Вход Водителя</h2>
@@ -830,19 +642,12 @@ def driver():
     c.close()
 
     rows = "".join([
-        f"""
-        <div class="card">
-            <h3>{b[0]}</h3>
-            <p><b>Станция:</b> {b[1]}</p>
-            <p><b>Время записи:</b> {b[2]}</p>
-        </div>
-        """
+        f"<div class='card'><h3>{b[0]}</h3><p><b>Станция:</b> {b[1]}</p><p><b>Время:</b> {b[2]}</p></div>"
         for b in bookings
     ]) or "<p class='empty'>Пока никто не записался</p>"
 
     return layout(f"""
 <h1>Список пассажиров</h1>
-<p>Водитель видит только тех, кто едет.</p>
 {rows}
 <a href="/logout" class="btn btn-red">Выйти</a>
 """)
