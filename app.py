@@ -151,8 +151,8 @@ def dashboard():
 @app.route("/book", methods=["POST"])
 def book():
     now = datetime.now().hour
-
-    if now < 17 or now >= 20:
+    
+if now < 17 or now >= 20:
         return "Запись закрыта"
 
     c = db()
