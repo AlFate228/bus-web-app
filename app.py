@@ -42,7 +42,7 @@ def send_email(to, subject, text):
 def send_code(email, code):
     send_email(email, "Код входа", f"Ваш код: {code}")
 
-# ---------- UI ----------
+# UI
 base = """
 <html>
 <head>
@@ -51,16 +51,9 @@ body{font-family:Arial;background:#0f172a;color:#fff;text-align:center}
 .container{margin-top:80px}
 input,button{padding:10px;margin:5px;border-radius:6px;border:none}
 button{background:#22c55e;color:#fff;cursor:pointer}
-.top{position:fixed;top:10px;right:10px;}
 </style>
 </head>
 <body>
-
-<div class="top">
-<a href="/admin"><button>Админ</button></a>
-<a href="/driver"><button>Водитель</button></a>
-</div>
-
 <div class="container">
 %s
 </div>
@@ -68,7 +61,7 @@ button{background:#22c55e;color:#fff;cursor:pointer}
 </html>
 """
 
-# ---------- HOME ----------
+# HOME
 @app.route("/")
 def home():
     return render_template_string(base % """
@@ -76,7 +69,7 @@ def home():
     <a href="/login"><button>Войти</button></a>
     """)
 
-# ---------- LOGIN ----------
+# LOGIN
 @app.route("/login", methods=["GET","POST"])
 def login():
     if request.method == "POST":
@@ -111,7 +104,7 @@ def login():
     </form>
     """)
 
-# ---------- VERIFY ----------
+# VERIFY
 @app.route("/verify", methods=["GET","POST"])
 def verify():
     if request.method == "POST":
@@ -136,7 +129,7 @@ def verify():
     </form>
     """)
 
-# ---------- DASHBOARD ----------
+# DASHBOARD
 @app.route("/dashboard")
 def dashboard():
     return render_template_string(base % """
@@ -147,20 +140,20 @@ def dashboard():
     </form>
     """)
 
-# ---------- BOOK ----------
+# BOOK
 @app.route("/book", methods=["POST"])
 def book():
     now = datetime.now().hour
-    
-if now < 17 or now >= 20:
+
+    if now < 17 or now >= 20:
         return "Запись закрыта"
 
     c = db()
     cur = c.cursor()
 
     count = cur.execute("SELECT COUNT(*) FROM bookings").fetchone()[0]
-    
-if count >= 7:
+
+    if count >= 7:
         return "Извините, мест нет"
 
     cur.execute("INSERT INTO bookings VALUES (?,?)",
@@ -169,7 +162,7 @@ if count >= 7:
 
     return "Вы записаны"
 
-# ---------- AUTO RESULT ----------
+# AUTO RESULT
 @app.before_request
 def auto_send_results():
     now = datetime.now().hour
@@ -193,7 +186,7 @@ def auto_send_results():
         cur.execute("UPDATE result_sent SET done=1")
         c.commit()
 
-# ---------- DRIVER ----------
+# DRIVER
 @app.route("/driver")
 def driver():
     if datetime.now().hour < 20:
@@ -207,13 +200,6 @@ def driver():
     return render_template_string(base % f"""
     <h2>Список пассажиров</h2>
     {rows}
-    """)
-
-# ---------- ADMIN ----------
-@app.route("/admin")
-def admin():
-    return render_template_string(base % """
-    <h2>Админка</h2>
     """)
 
 if __name__ == "__main__":
