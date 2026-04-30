@@ -1,5 +1,5 @@
 from flask import Flask, request, redirect, session, render_template_string
-import sqlite3
+import sqlite3, random
 from datetime import datetime
 
 app = Flask(__name__)
@@ -122,6 +122,7 @@ def layout(content):
 <title>Запись на автобус</title>
 <style>
 * {{ box-sizing: border-box; }}
+
 body {{
     margin: 0;
     min-height: 100vh;
@@ -129,12 +130,14 @@ body {{
     background: linear-gradient(180deg, #0f172a, #020617);
     color: white;
 }}
+
 .top-menu {{
     position: fixed;
     top: 16px;
     right: 16px;
     z-index: 100;
 }}
+
 .menu-toggle {{
     width: 46px;
     height: 46px;
@@ -146,6 +149,7 @@ body {{
     backdrop-filter: blur(20px);
     cursor: pointer;
 }}
+
 .sheet {{
     display: none;
     position: absolute;
@@ -158,7 +162,11 @@ body {{
     backdrop-filter: blur(22px);
     box-shadow: 0 20px 50px rgba(0,0,0,.45);
 }}
-.top-menu:hover .sheet {{ display: block; }}
+
+.top-menu:hover .sheet {{
+    display: block;
+}}
+
 .sheet-link {{
     display: block;
     width: 100%;
@@ -171,8 +179,10 @@ body {{
     text-align: center;
     font-weight: 700;
 }}
+
 .sheet-link.blue {{ background: #007aff; }}
 .sheet-link.danger {{ background: #ff3b30; }}
+
 .container {{
     width: 92%;
     max-width: 900px;
@@ -184,6 +194,7 @@ body {{
     box-shadow: 0 25px 70px rgba(0,0,0,.38);
     text-align: center;
 }}
+
 input, select {{
     width: 100%;
     max-width: 420px;
@@ -193,6 +204,7 @@ input, select {{
     border-radius: 16px;
     font-size: 16px;
 }}
+
 button, .btn {{
     display: inline-block;
     width: 100%;
@@ -208,14 +220,17 @@ button, .btn {{
     text-decoration: none;
     cursor: pointer;
 }}
+
 .btn-blue {{ background: #007aff; }}
 .btn-red {{ background: #ff3b30; }}
+
 .grid {{
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: 16px;
     text-align: left;
 }}
+
 .card {{
     background: rgba(255,255,255,.1);
     border: 1px solid rgba(255,255,255,.12);
@@ -223,17 +238,20 @@ button, .btn {{
     padding: 18px;
     margin-top: 15px;
 }}
+
 table {{
     width: 100%;
     border-collapse: collapse;
     margin-top: 12px;
     font-size: 14px;
 }}
+
 th, td {{
     padding: 10px;
     border-bottom: 1px solid rgba(255,255,255,.14);
     text-align: left;
 }}
+
 .empty {{ color: #cbd5e1; }}
 </style>
 </head>
@@ -681,15 +699,139 @@ def driver():
 
     c.close()
 
+    passengers = [b[0] for b in bookings]
+    random.shuffle(passengers)
+
+    while len(passengers) < 7:
+        passengers.append("Свободно")
+
     rows = "".join([
-        f"<div class='card'><h3>{b[0]}</h3><p><b>Станция:</b> {b[1]}</p><p><b>Время:</b> {b[2]}</p></div>"
+        f"""
+        <div class='card'>
+            <h3>{b[0]}</h3>
+            <p><b>Станция:</b> {b[1]}</p>
+            <p><b>Время:</b> {b[2]}</p>
+        </div>
+        """
         for b in bookings
     ]) or "<p class='empty'>Пока никто не записался</p>"
 
     return layout(f"""
 <h1>Список пассажиров</h1>
-{rows}
+
+<button onclick="document.getElementById('carBox').style.display='flex'" class="btn btn-blue">
+    🚐 Схема машины
+</button>
+
+<div class="car-box" id="carBox">
+    <div class="car">
+        <h2>🚐 Схема машины</h2>
+
+        <div class="row front">
+            <div class="seat driver-seat" title="Водитель">
+                🚗<br><span>Водитель</span>
+            </div>
+            <div class="seat" title="{passengers[0]}">
+                💺<br><span>Пассажир</span>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="seat" title="{passengers[1]}">💺</div>
+            <div class="seat" title="{passengers[2]}">💺</div>
+            <div class="seat" title="{passengers[3]}">💺</div>
+        </div>
+
+        <div class="row">
+            <div class="seat" title="{passengers[4]}">💺</div>
+            <div class="seat" title="{passengers[5]}">💺</div>
+            <div class="seat" title="{passengers[6]}">💺</div>
+        </div>
+
+        <p class="hint">Наведи на место, чтобы увидеть имя пассажира</p>
+
+        <button onclick="document.getElementById('carBox').style.display='none'" class="btn btn-red">
+            Закрыть
+        </button>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Пассажиры</h2>
+    {rows}
+</div>
+
 <a href="/logout" class="btn btn-red">Выйти</a>
+
+<style>
+.car-box {{
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.55);
+    backdrop-filter: blur(12px);
+    z-index: 999;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}}
+
+.car {{
+    width: 330px;
+    max-width: 95vw;
+    padding: 22px;
+    border-radius: 35px;
+    background: linear-gradient(180deg, #1e293b, #020617);
+    box-shadow: 0 30px 80px rgba(0,0,0,.6);
+    border: 1px solid rgba(255,255,255,.15);
+    text-align: center;
+}}
+
+.row {{
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin: 14px 0;
+}}
+
+.front {{
+    margin-bottom: 25px;
+}}
+
+.seat {{
+    width: 76px;
+    height: 76px;
+    border-radius: 22px;
+    background: rgba(255,255,255,.12);
+    border: 1px solid rgba(255,255,255,.18);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 24px;
+    cursor: pointer;
+    transition: .2s;
+    flex-direction: column;
+}}
+
+.seat span {{
+    font-size: 11px;
+}}
+
+.seat:hover {{
+    background: #34c759;
+    transform: scale(1.08);
+}}
+
+.driver-seat {{
+    background: rgba(0,122,255,.5);
+}}
+
+.hint {{
+    font-size: 13px;
+    color: #cbd5e1;
+}}
+</style>
 """)
 
 
