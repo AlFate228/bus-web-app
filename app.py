@@ -55,6 +55,13 @@ def init_db():
     )
     """)
 
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS settings(
+        key TEXT PRIMARY KEY,
+        value TEXT
+    )
+    """)
+
     for s in ["Лобня", "Физтех", "Селигерская", "Катуар", "Подосинки"]:
         cur.execute("INSERT OR IGNORE INTO stations(name) VALUES(?)", (s,))
 
@@ -68,6 +75,39 @@ def init_db():
 
 
 init_db()
+
+
+def auto_clear_bookings():
+    today = datetime.now().strftime("%Y-%m-%d")
+    hour = datetime.now().hour
+
+    if hour < 8:
+        return
+
+    c = db()
+    cur = c.cursor()
+
+    last_clear = cur.execute(
+        "SELECT value FROM settings WHERE key='last_clear_date'"
+    ).fetchone()
+
+    if last_clear and last_clear[0] == today:
+        c.close()
+        return
+
+    cur.execute("DELETE FROM bookings")
+    cur.execute(
+        "INSERT OR REPLACE INTO settings(key,value) VALUES('last_clear_date',?)",
+        (today,)
+    )
+
+    c.commit()
+    c.close()
+
+
+@app.before_request
+def before_every_request():
+    auto_clear_bookings()
 
 
 def layout(content):
